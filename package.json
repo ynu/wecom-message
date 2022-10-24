@@ -1,0 +1,26 @@
+{
+  "name": "wecom-message",
+  "version": "1.0.0",
+  "description": "企业微信 API - 接收和发送消息",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ynu/wecom-message.git"
+  },
+  "author": "na57",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ynu/wecom-message/issues"
+  },
+  "homepage": "https://github.com/ynu/wecom-message#readme",
+  "dependencies": {
+    "@wecom/crypto": "^1.0.1",
+    "debug": "^4.3.4",
+    "node-fetch": "^2.6.7",
+    "wecom-common": "^1.1.0",
+    "xml2js": "^0.4.23"
+  }
+}
