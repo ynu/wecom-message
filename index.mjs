@@ -1,17 +1,18 @@
 /**
  * 企业微信API-接收和发送消息
  */
- const fetch = require('node-fetch');
- const xml2js = require('xml2js');
- const { getToken, qyHost } = require('wecom-common');
- const { decrypt } = require('@wecom/crypto');
- const warn = require('debug')('wecom-message:warn');
- const error = require('debug')('wecom-message:error');
- const info = require('debug')('wecom-message:info');
- const debug = require('debug')('wecom-message:debug');
- 
- const {
-   ENCODING_AES_KEY, // 接收消息-EncodingAESKey
+import axios from 'axios';
+import xml2js from 'xml2js';
+import { getToken, qyHost } from 'wecom-common';
+import { decrypt } from '@wecom/crypto';
+import Debug from 'debug';
+const warn = Debug('wecom-message:warn');
+const error = Debug('wecom-message:error');
+const info = Debug('wecom-message:info');
+const debug = Debug('wecom-message:debug');
+
+const {
+  ENCODING_AES_KEY, // 接收消息-EncodingAESKey
  } = process.env;
  
 
@@ -19,7 +20,7 @@
  * 解析接收到的数据包
  * @param {String} xml XML数据
  */
-const parseMessage = async (xml, encoding_aes_key = ENCODING_AES_KEY) => {
+export const parseMessage = async (xml, encoding_aes_key = ENCODING_AES_KEY) => {
   const parser = new xml2js.Parser();
   // 将消息体解析为JSON
   const result = await parser.parseStringPromise(xml);
@@ -228,7 +229,7 @@ const refineTemplateCardEventInfoFromXmlJson = (json) => {
  * @param {String} msgType 消息类型值
  * @returns 消息类型文本
  */
-const msgTypeToText = (msgType) => {
+export const msgTypeToText = (msgType) => {
   switch (msgType) {
     case 'event':
       return '事件消息'
@@ -244,7 +245,7 @@ const msgTypeToText = (msgType) => {
  * @param {String} event 事件类型值
  * @returns 事件类型文本
  */
-const eventTypeToText = (event) => {
+export const eventTypeToText = (event) => {
   switch (event) {
     case 'subscribe':
       return '关注'
@@ -266,19 +267,16 @@ const eventTypeToText = (event) => {
  *  - enable_duplicate_check 是否开启重复消息检查，0表示否，1表示是，默认0
  *  - enable_id_trans 表示是否开启id转译，0表示否，1表示是，默认0
  */
-const send = async (message, options = {}) => {
+export const send = async (message, options = {}) => {
   const enable_duplicate_check = options.enable_duplicate_check || 0
   const enable_id_trans = options.enable_id_trans || 0;
   const token = await getToken(options);
-  const res = await fetch(`${qyHost}/message/send?access_token=${token}`, {
-    method: 'POST',
-    body: JSON.stringify({
-      ...message,
-      enable_id_trans,
-      enable_duplicate_check,
-    }),
+  const res = await axios.post(`${qyHost}/message/send?access_token=${token}`, {
+    ...message,
+    enable_id_trans,
+    enable_duplicate_check,
   });
-  const result = await res.json();
+  const result = res.data;
   if (result.errcode) {
     error(`发送消息失败:${result.errmsg}(${result.errcode})`);
   } else {
@@ -296,7 +294,7 @@ const send = async (message, options = {}) => {
  *  - secret 用于发送消息的secret
  *  - safe 表示是否是保密消息，0表示可对外分享，1表示不能分享且内容显示水印，默认为0
  */
-const sendText = async (to, agentid, content, options = {}) => {
+export const sendText = async (to, agentid, content, options = {}) => {
   const safe = options.safe || 0;
   const message = {
     ...to,
@@ -308,7 +306,7 @@ const sendText = async (to, agentid, content, options = {}) => {
   return send(message, options);
 };
 
-const sendTemplateCard = async (to, agentid, template_card, options = {}) => {
+export const sendTemplateCard = async (to, agentid, template_card, options = {}) => {
   const message = {
     ...to,
     msgtype: 'template_card',
@@ -318,7 +316,7 @@ const sendTemplateCard = async (to, agentid, template_card, options = {}) => {
   return send(message, options);
 }
 
-const sendTextCard = async (to, agentid, textcard, options = {}) => {
+export const sendTextCard = async (to, agentid, textcard, options = {}) => {
   const message = {
     ...to,
     msgtype: 'textcard',
@@ -336,7 +334,7 @@ const sendTextCard = async (to, agentid, textcard, options = {}) => {
  * @param {Object} options 相关配置
  * @returns 发送结果
  */
-const sendMarkdown = async (to, agentid, content, options = {}) => {
+export const sendMarkdown = async (to, agentid, content, options = {}) => {
   const message = {
     ...to,
     msgtype: 'markdown',
@@ -348,16 +346,13 @@ const sendMarkdown = async (to, agentid, content, options = {}) => {
   return send(message, options);
 }
  
- 
- module.exports = {
-   parseMessage,
-   msgTypeToText,
-   eventTypeToText,
-   send,
-   sendText,
-   sendTemplateCard,
-   sendMarkdown,
-   sendTextCard,
- };
- 
- 
+export default {
+  parseMessage,
+  msgTypeToText,
+  eventTypeToText,
+  send,
+  sendText,
+  sendTemplateCard,
+  sendTextCard,
+  sendMarkdown,
+}
