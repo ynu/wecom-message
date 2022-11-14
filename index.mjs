@@ -16,6 +16,157 @@ const {
  } = process.env;
  
 
+export class WecomMessage {
+  constructor(json) {
+    debug(`WecomMessage开始解析XmlJson数据::${JSON.stringify(json)}`);
+    Object.assign(this, {
+      ...json,
+      ToUserName: json.ToUserName[0],
+      FromUserName: json.FromUserName[0],
+      CreateTime: parseInt(json.CreateTime[0], 10),
+      MsgType: json.MsgType[0],
+      MsgId: json.MsgId ? json.MsgId[0] : undefined,
+      AgentID: json.AgentID ? json.AgentID[0] : undefined,
+    });
+    this.MsgTypeText = this.msgTypeToText();
+  }
+  msgTypeToText() {
+    switch (this.MsgType) {
+      case 'event':
+        return '事件消息';
+      case 'text':
+        return '文本消息';
+      default:
+        return `未定义(${this.MsgType})`;
+    }
+  }
+}
+
+export class WecomTextMessage extends WecomMessage {
+  constructor(json) {
+    super(json);
+    this.Content = json.Content[0];
+  }
+}
+
+export class WecomEventMessage extends WecomMessage {
+  constructor(json) {
+    super(json);
+    Object.assign(this, {
+      ...this,
+      Event: json.Event[0],
+      EventKey: json.EventKey ? json.EventKey[0]: undefined,
+    });
+    this.EventText = this.eventToText();
+
+    info(`WecomEventMessage按事件类型(Event字段)优化结构`);
+
+    switch (this.Event) {
+      case 'sys_approval_change':   // 审批申请状态变化
+        info(`处理sys_approval_change事件消息`);
+        this.ApprovalInfo = this.refineApprovalInfoFromXmlJson(this.ApprovalInfo[0]);
+        break;
+      case 'change_contact':      // 通讯录变更通知
+        Object.assign(this, {
+          ...this,
+          ...refineContactFromXmlJson(this),
+        });
+        break;
+      case 'template_card_event':
+        Object.assign(this, {
+          ...this,
+          ...refineTemplateCardEventInfoFromXmlJson(this),
+        });
+        break;
+    }
+  }
+  eventToText() {
+    switch (this.Event) {
+      case 'subscribe':
+        return '关注'
+      case 'unsubscribe':
+        return '取消关注'
+      case 'sys_approval_change':
+        return '审批申请状态变化回调通知'
+      case 'change_contact':
+        return '通讯录回调通知';
+      case 'click':
+        return '点击菜单拉取消息的事件';
+      case 'view':
+        return '点击菜单跳转链接的事件';
+      default:
+        return `未定义(${this.Event})`
+    }
+  }
+  refineApprovalInfoFromXmlJson(that) {
+    debug(`开始解析ApprovalInfo::${JSON.stringify(that)}`)
+    return {
+      ...that,
+      SpNo: that.SpNo[0],
+      SpName: that.SpName[0],
+      SpStatus: parseInt(that.SpStatus[0], 10),
+      SpStatusText: this.spStatusToText(that.SpStatus),
+      TemplateId: that.TemplateId[0],
+      ApplyTime: parseInt(that.ApplyTime[0], 10),
+      Applyer: that.Applyer[0],
+      SpRecord: {
+        SpStatus: parseInt(that.SpRecord[0].SpStatus[0], 10),
+        ApproverAttr: parseInt(that.SpRecord[0].ApproverAttr[0], 10),
+        Details: {
+          Approver: {
+            UserId: that.SpRecord[0].Details[0].Approver[0].UserId[0],
+          },
+          Speech: that.SpRecord[0].Details[0].Speech[0],
+          SpStatus: parseInt(that.SpRecord[0].Details[0].SpStatus[0], 10),
+          SpTime: parseInt(that.SpRecord[0].Details[0].SpTime[0], 10),
+        },
+      },
+      Notifyer: that.Notifyer ? this.refineUserInfo(that.Notifyer[0]) : undefined,
+      StatuChangeEvent: parseInt(that.StatuChangeEvent[0], 10),
+    }
+  }
+
+  /**
+   * 用于解析形如:
+   * <Applyer>
+      <UserId><![CDATA[WuJunJie]]></UserId>
+      <Party><![CDATA[1]]></Party>
+    </Applyer>
+   * 的XmlJson数据
+   * @param {XmlJson} xmlJson 包含用户信息的Json数据
+   * @returns 
+   */
+  refineUserInfo(xmlJson) {
+    return {
+      UserId: xmlJson.UserId[0],
+      Party: xmlJson.Party ? xmlJson.Party[0] : undefined,
+    }
+  }
+
+  spStatusToText(spStatus) {
+    spStatus ??= this.ApprovalInfo?.SpStatus;
+    spStatus = (spStatus instanceof Number) ? spStatus : parseInt(spStatus, 10);
+    switch (spStatus) {
+      case 1:
+        return '审批中'
+      case 2:
+        return '已通过';
+      case 3:
+        return '已驳回';
+      case 4:
+        return '已撤销';
+      case 6:
+        return '通过后撤销';
+      case 7:
+        return '已删除';
+      case 10:
+        return '已支付';
+      default:
+        return '未知';
+    }
+  }
+}
+
 /**
  * 解析接收到的数据包
  * @param {String} xml XML数据
@@ -32,124 +183,23 @@ export const parseMessage = async (xml, encoding_aes_key = ENCODING_AES_KEY) => 
   // 将消息块解析为JSON
   const messageJson = await parser.parseStringPromise(message);
 
-  let json = {
-    ...messageJson.xml,
-    ToUserName: messageJson.xml.ToUserName[0],
-    FromUserName: messageJson.xml.FromUserName[0],
-    CreateTime: parseInt(messageJson.xml.CreateTime[0], 10),
-    MsgType: messageJson.xml.MsgType[0],
-  };
-
-  // 以下字段不一定有，要单独处理
-  if (messageJson.xml.AgentID) json.AgentID =  messageJson.xml.AgentID[0];
-
-  // 根据消息类型优化JSON
-  info(`按消息类型(MsgType)进行解析:${json.MsgType}`);
-  switch (json.MsgType) {
-    case 'event':
-      json = {
-        ...json,
-        ...refineEventFromXmlJson(json),
-      };
+  // 根据情况返回不同的对象
+  switch (messageJson.xml.MsgType[0]) {
     case 'text':
-      json = {
-        ...json,
-        ...refineTextFromXmlJson(json),
-      }
-      break;
+      info('按文本消息进行解析');
+      return new WecomTextMessage(messageJson.xml);
+    case 'event':
+      info('按事件消息进行解析');
+      return new WecomEventMessage(messageJson.xml);
+    case 'location':
+    case 'link':
+    case 'image':
+    case 'voice':
+    case 'video':
     default:
-      warn(`当前MsgType(${json.MsgType}的消息尚不能被解析)`);
+      info('按默认消息进行解析')
+      return new WecomMessage(messageJson.xml);
   }
-
-  return json;
-}
-
-/**
- * 针对事件消息，优化由XML解析的JSON结构
- * @param {String} json 由XML解析的JSON结构
- */
-const refineEventFromXmlJson = (json) => {
-  let result = {
-    ...json,
-    Event: json.Event[0],
-  };
-
-  // 根据事件类型优化事件参数
-  info(`按事件类型(event)进行解析:${result.Event}`);
-  switch (result.Event) {
-    case 'sys_approval_change':   // 审批申请状态变化
-      result = {
-        ...result,
-        ApprovalInfo: refineApprovalInfoFromXmlJson(result.ApprovalInfo[0]),
-      };
-      break;
-    case 'change_contact':      // 通讯录变更通知
-      result = {
-        ...result,
-        ...refineContactFromXmlJson(result),
-      }
-      break;
-    case 'template_card_event':
-      result = {
-        ...result,
-        ...refineTemplateCardEventInfoFromXmlJson(result),
-      }
-      break;
-  }
-  return result;
-}
-
-/**
- * 针对MsgType==text的JSON数据（来自XML）进行解析
- * @param {Object} json 待解析的JSON对象
- * @returns json对象
- * @seealso https://developer.work.weixin.qq.com/document/path/90239
- */
-const refineTextFromXmlJson = (json) => {
-  return {
-    ...json,
-    AgentID: json.AgentID[0],
-    Content: json.Content[0],
-    MsgId: json.MsgId[0],
-  };
-}
-
-
-/**
- * 优化ApprovalInfo数据JSON结构
- * @param {String} json ApprovalInfo数据的XML结构
- * @returns 
- */
-const refineApprovalInfoFromXmlJson = (json) => {
-  let result = {
-    ...json,
-    SpNo: json.SpNo[0],
-    SpName: json.SpName[0],
-    SpStatus: parseInt(json.SpStatus[0], 10),
-    TemplateId: json.TemplateId[0],
-    ApplyTime: parseInt(json.ApplyTime[0], 10),
-    Applyer: {
-      UserId: json.Applyer[0].UserId[0],
-      Party: json.Applyer[0].Party[0],
-    },
-    SpRecord: {
-      SpStatus: parseInt(json.SpRecord[0].SpStatus[0], 10),
-      ApproverAttr: parseInt(json.SpRecord[0].ApproverAttr[0], 10),
-      Details: {
-        Approver: {
-          UserId: json.SpRecord[0].Details[0].Approver[0].UserId[0],
-        },
-        Speech: json.SpRecord[0].Details[0].Speech[0],
-        SpStatus: parseInt(json.SpRecord[0].Details[0].SpStatus[0], 10),
-        SpTime: parseInt(json.SpRecord[0].Details[0].SpTime[0], 10),
-      },
-    },
-    Notifyer: json.Notifyer ? {
-      UserId: json.Notifyer[0].UserId ? json.Notifyer[0].UserId[0] : '',
-    } : null,
-    StatuChangeEvent: parseInt(json.StatuChangeEvent[0], 10),
-  };
-  return result;
 }
 
 /**
@@ -222,42 +272,6 @@ const refineTemplateCardEventInfoFromXmlJson = (json) => {
     SelectedItems: json.SelectedItems[0].SelectedItem,
   }
   return result;
-}
-
-/**
- * 将消息类型值转换为文本
- * @param {String} msgType 消息类型值
- * @returns 消息类型文本
- */
-export const msgTypeToText = (msgType) => {
-  switch (msgType) {
-    case 'event':
-      return '事件消息'
-    case 'text':
-      return '文本消息'
-    default:
-      return `未定义(${msgType})`;
-  }
-}
-
-/**
- * 将事件类型值转换为文本
- * @param {String} event 事件类型值
- * @returns 事件类型文本
- */
-export const eventTypeToText = (event) => {
-  switch (event) {
-    case 'subscribe':
-      return '关注'
-    case 'unsubscribe':
-      return '取消关注'
-    case 'sys_approval_change':
-      return '审批申请状态变化回调通知'
-    case 'change_contact':
-      return '通讯录回调通知';
-    default:
-      return `未定义(${event})`
-  }
 }
 
 /**
@@ -348,8 +362,6 @@ export const sendMarkdown = async (to, agentid, content, options = {}) => {
  
 export default {
   parseMessage,
-  msgTypeToText,
-  eventTypeToText,
   send,
   sendText,
   sendTemplateCard,
