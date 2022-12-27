@@ -1,6 +1,6 @@
 {
   "name": "wecom-message",
-  "version": "2.4.0",
+  "version": "2.4.2",
   "description": "企业微信 API - 接收和发送消息",
   "main": "index.mjs",
   "scripts": {

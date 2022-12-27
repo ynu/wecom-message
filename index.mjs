@@ -98,6 +98,12 @@ export class WecomEventMessage extends WecomMessage {
         return `未定义(${this.Event})`
     }
   }
+  /**
+   * 处理ApprovalInfo消息
+   * @param {Object} that 消息对象
+   * @returns 
+   * @see https://developer.work.weixin.qq.com/document/path/91815
+   */
   refineApprovalInfoFromXmlJson(that) {
     debug(`开始解析ApprovalInfo::${JSON.stringify(that)}`)
     return {
@@ -108,7 +114,10 @@ export class WecomEventMessage extends WecomMessage {
       SpStatusText: this.spStatusToText(that.SpStatus),
       TemplateId: that.TemplateId[0],
       ApplyTime: parseInt(that.ApplyTime[0], 10),
-      Applyer: that.Applyer[0],
+      Applyer: {
+        UserId: that.Applyer[0].UserId[0],
+        Party: that.Applyer[0].Party[0],
+      },
       SpRecord: {
         SpStatus: parseInt(that.SpRecord[0].SpStatus[0], 10),
         ApproverAttr: parseInt(that.SpRecord[0].ApproverAttr[0], 10),
@@ -282,13 +291,21 @@ const refineTemplateCardEventInfoFromXmlJson = (json) => {
  *  - enable_id_trans 表示是否开启id转译，0表示否，1表示是，默认0
  */
 export const send = async (message, options = {}) => {
+
+  // 表示是否开启重复消息检查，0表示否，1表示是，默认0
   const enable_duplicate_check = options.enable_duplicate_check || 0
+
+  // 表示是否开启id转译，0表示否，1表示是，默认0
   const enable_id_trans = options.enable_id_trans || 0;
+
+  // 表示是否重复消息检查的时间间隔，默认1800s，最大不超过4小时
+  const duplicate_check_interval = options.duplicate_check_interval || 1800
   const token = await getToken(options);
   const res = await axios.post(`${qyHost}/message/send?access_token=${token}`, {
     ...message,
     enable_id_trans,
     enable_duplicate_check,
+    duplicate_check_interval,
   });
   const result = res.data;
   if (result.errcode) {
