@@ -123,22 +123,14 @@ export class WecomEventMessage extends WecomMessage {
     })
 
     // 处理Comments字段
-    const refineCommentsFromXmlJson = (json) => {
-      let comments = [];
-      if (json.Comments) {
-        comments = json.Comments.map(comment => {
-          return {
-            CommentUserInfo: {
-              UserId: comment.CommentUserInfo[0].UserId[0],
-            },
-            CommentTime: parseInt(comment.CommentTime[0], 10),
-            CommentContent: comment.CommentContent[0],
-            CommentId: comment.CommentId[0],
-          }
-        });
-      }
-      return comments;
-    };
+    const refineCommentsFromXmlJson = (comments) => comments.map(comment => ({
+      CommentUserInfo: {
+        UserId: comment.CommentUserInfo[0].UserId[0],
+      },
+      CommentTime: parseInt(comment.CommentTime[0], 10),
+      CommentContent: comment.CommentContent[0],
+      CommentId: comment.CommentId[0],
+    }));
     return {
       ...that,
       SpNo: that.SpNo[0],
@@ -147,7 +139,7 @@ export class WecomEventMessage extends WecomMessage {
       SpStatusText: this.spStatusToText(that.SpStatus),
       TemplateId: that.TemplateId[0],
       ApplyTime: parseInt(that.ApplyTime[0], 10),
-      Applyer: that.Applyer ? this.refineUserInfo(that.Applyer[0]) : undefined,
+      Applyer: that.Applyer ? refineUserInfo(that.Applyer[0]) : undefined,
       SpRecord: {
         SpStatus: parseInt(that.SpRecord[0].SpStatus[0], 10),
         ApproverAttr: parseInt(that.SpRecord[0].ApproverAttr[0], 10),
@@ -160,7 +152,8 @@ export class WecomEventMessage extends WecomMessage {
           SpTime: parseInt(that.SpRecord[0].Details[0].SpTime[0], 10),
         },
       },
-      Notifyer: that.Notifyer ? this.refineUserInfo(that.Notifyer[0]) : undefined,
+      Notifyer: that.Notifyer ? refineUserInfo(that.Notifyer[0]) : undefined,
+      Comments: that.Comments ? refineCommentsFromXmlJson(that.Comments) : undefined,
       StatuChangeEvent: parseInt(that.StatuChangeEvent[0], 10),
     }
   }
