@@ -1,10 +1,11 @@
 import assert from 'assert';
 import cache from 'memory-cache';
-import { sendText, parseMessage, WecomEventMessage } from '../index.mjs';
+import { sendText, parseMessage, parseXmlToJson, WecomEventMessage } from '../index.mjs';
 
 const {
   TEST_USERID, TEST_AGENTID, 
   CORP_ID, SECRET,
+  TEST_ENCRYPT_MSG,
   TEST_MSG, TEST_ENCODING_AES_KEY,
 } = process.env;
 describe('wecom-message 测试', () => {
@@ -21,8 +22,15 @@ describe('wecom-message 测试', () => {
     });
   });
   describe('解析消息体测试', () => {
-    it('parseMessage 解析接收到的消息', async () => {
-      const res = await parseMessage(TEST_MSG, TEST_ENCODING_AES_KEY);
+    it('parseMessage 解析接收到的加密消息', async () => {
+      const res = await parseMessage(TEST_ENCRYPT_MSG, TEST_ENCODING_AES_KEY);
+      assert.equal(res.Content, 'hello');
+    });
+    it('parseXmlToJson 解析XML消息块', async () => {
+      const res = await parseXmlToJson(TEST_MSG);
+      assert.equal(res.ApprovalInfo.SpNo, '202212280011');
+      assert.equal(res.ApprovalInfo.SpRecord[0].Details[0].Approver.UserId, 'na57');
+      assert.equal(res.ApprovalInfo.Comments[0].CommentUserInfo.UserId, 'na57');
     });
   });
   describe('WecomEventMessage 测试', () => {

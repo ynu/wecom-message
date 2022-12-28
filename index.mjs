@@ -133,7 +133,7 @@ export class WecomEventMessage extends WecomMessage {
     }));
 
     // 处理SpRecord字段
-    const refineSpRecordFromXmlJson = (spRecords) => spRecords.maps(spRecord => ({
+    const refineSpRecordFromXmlJson = (spRecords) => spRecords.map(spRecord => ({
       SpStatus: parseInt(spRecord.SpStatus[0], 10),
       ApproverAttr: parseInt(spRecord.ApproverAttr[0], 10),
       Details: spRecord.Details ? spRecord.Details.map(detail => ({
@@ -198,8 +198,13 @@ export const parseMessage = async (xml, encoding_aes_key = ENCODING_AES_KEY) => 
 
   // 对加密的消息进行解密
   const { message } = decrypt(encoding_aes_key, result.xml.Encrypt[0]);
+  return parseXmlToJson(message);
+}
+
+export const parseXmlToJson = async (message) => {
   debug(`待解析的消息:${JSON.stringify(message)}`);
 
+  const parser = new xml2js.Parser();
   // 将消息块解析为JSON
   const messageJson = await parser.parseStringPromise(message);
 
@@ -390,6 +395,7 @@ export const sendMarkdown = async (to, agentid, content, options = {}) => {
  
 export default {
   parseMessage,
+  parseXmlToJson,
   send,
   sendText,
   sendTemplateCard,
