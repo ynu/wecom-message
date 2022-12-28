@@ -131,6 +131,20 @@ export class WecomEventMessage extends WecomMessage {
       CommentContent: comment.CommentContent[0],
       CommentId: comment.CommentId[0],
     }));
+
+    // 处理SpRecord字段
+    const refineSpRecordFromXmlJson = (spRecords) => spRecords.maps(spRecord => ({
+      SpStatus: parseInt(spRecord.SpStatus[0], 10),
+      ApproverAttr: parseInt(spRecord.ApproverAttr[0], 10),
+      Details: spRecord.Details ? spRecord.Details.map(detail => ({
+        Approver: {
+          UserId: detail.Approver[0].UserId[0],
+        },
+        Speech: detail.Speech[0],
+        SpStatus: parseInt(detail.SpStatus[0], 10),
+        SpTime: parseInt(detail.SpTime[0], 10),
+      })) : undefined,
+    }));
     return {
       ...that,
       SpNo: that.SpNo[0],
@@ -140,18 +154,7 @@ export class WecomEventMessage extends WecomMessage {
       TemplateId: that.TemplateId[0],
       ApplyTime: parseInt(that.ApplyTime[0], 10),
       Applyer: that.Applyer ? refineUserInfo(that.Applyer[0]) : undefined,
-      SpRecord: {
-        SpStatus: parseInt(that.SpRecord[0].SpStatus[0], 10),
-        ApproverAttr: parseInt(that.SpRecord[0].ApproverAttr[0], 10),
-        Details: {
-          Approver: {
-            UserId: that.SpRecord[0].Details[0].Approver[0].UserId[0],
-          },
-          Speech: that.SpRecord[0].Details[0].Speech[0],
-          SpStatus: parseInt(that.SpRecord[0].Details[0].SpStatus[0], 10),
-          SpTime: parseInt(that.SpRecord[0].Details[0].SpTime[0], 10),
-        },
-      },
+      SpRecord: that.SpRecord ? refineSpRecordFromXmlJson(that.SpRecord) : undefined,
       Notifyer: that.Notifyer ? refineUserInfo(that.Notifyer[0]) : undefined,
       Comments: that.Comments ? refineCommentsFromXmlJson(that.Comments) : undefined,
       StatuChangeEvent: parseInt(that.StatuChangeEvent[0], 10),
