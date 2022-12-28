@@ -106,6 +106,39 @@ export class WecomEventMessage extends WecomMessage {
    */
   refineApprovalInfoFromXmlJson(that) {
     debug(`开始解析ApprovalInfo::${JSON.stringify(that)}`)
+
+    /**
+     * 用于解析形如:
+     * <Applyer>
+        <UserId><![CDATA[WuJunJie]]></UserId>
+        <Party><![CDATA[1]]></Party>
+      </Applyer>
+    * 的XmlJson数据
+    * @param {XmlJson} xmlJson 包含用户信息的Json数据
+    * @returns 
+    */
+    const refineUserInfo = (xmlJson) => ({
+      UserId: xmlJson.UserId[0],
+      Party: xmlJson.Party ? xmlJson.Party[0] : undefined,
+    })
+
+    // 处理Comments字段
+    const refineCommentsFromXmlJson = (json) => {
+      let comments = [];
+      if (json.Comments) {
+        comments = json.Comments.map(comment => {
+          return {
+            CommentUserInfo: {
+              UserId: comment.CommentUserInfo[0].UserId[0],
+            },
+            CommentTime: parseInt(comment.CommentTime[0], 10),
+            CommentContent: comment.CommentContent[0],
+            CommentId: comment.CommentId[0],
+          }
+        });
+      }
+      return comments;
+    };
     return {
       ...that,
       SpNo: that.SpNo[0],
@@ -114,10 +147,7 @@ export class WecomEventMessage extends WecomMessage {
       SpStatusText: this.spStatusToText(that.SpStatus),
       TemplateId: that.TemplateId[0],
       ApplyTime: parseInt(that.ApplyTime[0], 10),
-      Applyer: {
-        UserId: that.Applyer[0].UserId[0],
-        Party: that.Applyer[0].Party[0],
-      },
+      Applyer: that.Applyer ? this.refineUserInfo(that.Applyer[0]) : undefined,
       SpRecord: {
         SpStatus: parseInt(that.SpRecord[0].SpStatus[0], 10),
         ApproverAttr: parseInt(that.SpRecord[0].ApproverAttr[0], 10),
@@ -135,22 +165,7 @@ export class WecomEventMessage extends WecomMessage {
     }
   }
 
-  /**
-   * 用于解析形如:
-   * <Applyer>
-      <UserId><![CDATA[WuJunJie]]></UserId>
-      <Party><![CDATA[1]]></Party>
-    </Applyer>
-   * 的XmlJson数据
-   * @param {XmlJson} xmlJson 包含用户信息的Json数据
-   * @returns 
-   */
-  refineUserInfo(xmlJson) {
-    return {
-      UserId: xmlJson.UserId[0],
-      Party: xmlJson.Party ? xmlJson.Party[0] : undefined,
-    }
-  }
+  
 
   spStatusToText(spStatus) {
     spStatus ??= this.ApprovalInfo?.SpStatus;
